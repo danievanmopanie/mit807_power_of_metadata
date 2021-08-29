@@ -16,6 +16,7 @@
 # LOAD LIBRARIES
 # ----------------------------------------
 
+#install.packages("stm")
 library(stm)        # Package for sturctural topic modeling
 #install.packages("igraph")
 library(igraph)     # Package for network analysis and visualisation
@@ -27,12 +28,18 @@ library(stmCorrViz) # Package for hierarchical correlation view of STMs
 # ----------------------------------------
 
 getwd()
-setwd("/cloud/project/tutorials_and_exercises/data")
+#setwd("/cloud/project/tutorials_and_exercises/data") #for cloud IDE
+setwd("/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/tutorials_and_exercises") #for local IDE
 
+list.files()
+
+setwd("/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/tutorials_and_exercises/data")
+list.files()
 data <- read.csv("poliblogs2008.csv") # Download link: https://goo.gl/4ohgr4
 head(data)
 colnames(data)
-load("VignetteObjects.RData")         # Download link: https://goo.gl/xK17EQ
+
+#load("VignetteObjects.RData")         # Download link: https://goo.gl/xK17EQ
 
 # ----------------------------------------
 # PREPARE AND PRE-PROCESS DATA
@@ -40,20 +47,25 @@ load("VignetteObjects.RData")         # Download link: https://goo.gl/xK17EQ
 
 # Stemming, stopword removal, etc. using textProcessor() function
 ?textProcessor
-processed <- textProcessor(data$documents, metadata=data)
+processed <- textProcessor(data$documents, 
+                           metadata=data)
 head(processed$meta)
+typeof(processed)
 
 # Structure and index for usage in the STM model. Ensure that object has no missing
 # values. Remove low frequency words using 'lower.thresh' option. See ?prepDocuments 
 # for more information.
 ?prepDocuments
-out <- prepDocuments(processed$documents, processed$vocab, processed$meta)
+out <- prepDocuments(processed$documents, 
+                     processed$vocab, 
+                     processed$meta)
 
 # The output will have object meta, documents, and vocab 
 docs <- out$documents
 head(docs)
 vocab <- out$vocab
-head(vocab)
+head(vocab,30)
+tail(vocab,30)
 meta <-out$meta
 head(meta)
 
@@ -78,13 +90,18 @@ poliblogPrevFit <- stm(out$documents,
                        out$vocab, 
                        K = 20, 
                        prevalence =~rating+s(day), 
-                       max.em.its=75, 
+                       max.em.its=150, 
                        data=out$meta, 
                        init.type="Spectral", 
                        seed=8458159)
 
+poliblogPrevFit$time
+
 # Plot the STM using different types. See the proportion of each topic in the entire
 # corpus. Save as pdf files.
+
+par("mar")
+par(mar = c(1,1,1,1))
 #pdf("stm-plot-prevfit.pdf", width=10, height=8.5)
 plot(poliblogPrevFit)
 #dev.off()
@@ -116,18 +133,22 @@ poliblogSelect <- selectModel(out$documents,
                               out$vocab, 
                               K=20, 
                               prevalence=~rating+s(day),
-                              max.em.its=75, data=meta, runs=20, seed=8458159)
+                              max.em.its=150, 
+                              data=meta, 
+                              runs=20, 
+                              seed=8458159)
 
 # Plot the different models that make the cut along exclusivity and semantic coherence
 # of their topics. Save plot as pdf file.
-pdf("stm-plot-selected.pdf", width=10, height=8.5)
+#pdf("stm-plot-selected.pdf", width=10, height=8.5)
+par(mar = c(2,2,1,1))
 plotModels(poliblogSelect)
-dev.off()
+#dev.off()
 
 # Each STM has semantic coherence and exclusivity values associated with each topic. 
 # The topicQuality() function plots these values and labels each with its topic number.
 # Save plot as pdf file.
-pdf("stm-plot-topic-quality.pdf", width=10, height=8.5)
+#pdf("stm-plot-topic-quality.pdf", width=10, height=8.5)
 topicQuality(model=poliblogPrevFit, documents=docs)
 dev.off()
 
@@ -144,8 +165,13 @@ selectedModel3 <- poliblogSelect$runout[[3]] # Choose model #3
 # terms of exclusivity and semantic coherence. If multiple runs are candidates 
 # (i.e., none weakly dominates the others), a single model run is randomly chosen 
 # from the set of undominated runs. Save plots as pdf files.
-storage <- manyTopics(out$documents, out$vocab, K=c(7:10), prevalence=~rating+s(day),
-                      data=meta, runs=10)
+storage <- manyTopics(out$documents, 
+                      out$vocab, 
+                      K=c(7:10), 
+                      prevalence=~rating+s(day),
+                      data=meta, 
+                      runs=10)
+
 storageOutput1 <- storage$out[[1]] # 7 topics
 pdf("stm-plot-storage-output1.pdf", width=10, height=8.5)
 plot(storageOutput1)
