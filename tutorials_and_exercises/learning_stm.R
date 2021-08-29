@@ -59,9 +59,9 @@ head(meta)
 
 # Take a look at how many words and documents would be removed using different 
 # lower.thresholds. Save plot as pdf.
-pdf("stm-plot-removed.pdf", width=10, height=8.5)
+#pdf("stm-plot-removed.pdf", width=10, height=8.5)
 plotRemoved(processed$documents, lower.thresh=seq(1,200, by=100))
-dev.off()
+#dev.off()
 
 # ----------------------------------------
 # ESTIMATE THE STRUCTURAL TOPIC MODEL
@@ -73,28 +73,35 @@ dev.off()
 # applies a spline normalization to 'day' variable. The authors specified the maximum
 # number of expectation-maximization iterations = 75, and the seed they are using for 
 # reproducibility.
-poliblogPrevFit <- stm(out$documents, out$vocab, K=20, prevalence=~rating+s(day), 
-                       max.em.its=75, data=out$meta, init.type="Spectral", 
+
+poliblogPrevFit <- stm(out$documents, 
+                       out$vocab, 
+                       K = 20, 
+                       prevalence =~rating+s(day), 
+                       max.em.its=75, 
+                       data=out$meta, 
+                       init.type="Spectral", 
                        seed=8458159)
 
 # Plot the STM using different types. See the proportion of each topic in the entire
 # corpus. Save as pdf files.
-pdf("stm-plot-prevfit.pdf", width=10, height=8.5)
+#pdf("stm-plot-prevfit.pdf", width=10, height=8.5)
 plot(poliblogPrevFit)
-dev.off()
-pdf("stm-plot-prevfit-summary.pdf", width=10, height=8.5)
+#dev.off()
+#pdf("stm-plot-prevfit-summary.pdf", width=10, height=8.5)
 plot(poliblogPrevFit, type="summary", xlim=c(0,.4))
-dev.off()
-pdf("stm-plot-prevfit-labels.pdf", width=10, height=8.5)
+#dev.off()
+#pdf("stm-plot-prevfit-labels.pdf", width=10, height=8.5)
 plot(poliblogPrevFit, type="labels", topics=c(3,7,20))
-dev.off()
-pdf("stm-plot-prevfit-histogram.pdf", width=14, height=12.5)
+#dev.off()
+#pdf("stm-plot-prevfit-histogram.pdf", width=14, height=12.5)
 plot(poliblogPrevFit, type="hist")
-dev.off()
-pdf("stm-plot-prevfit-perspectives-two-topic.pdf", width=14, height=12.5)
+#dev.off()
+#pdf("stm-plot-prevfit-perspectives-two-topic.pdf", width=14, height=12.5)
 plot(poliblogPrevFit, type="perspectives", topics=c(7,10))
-dev.off()
+#dev.off()
 
+plot(poliblogPrevFit, type="labels", topics=c(3,7,20))
 # ----------------------------------------
 # EVALUATE MODELS
 # ----------------------------------------
@@ -105,7 +112,10 @@ dev.off()
 # models with average scores towards the upper right side of the plot). STM will
 # compare a number of models side by side and will keep the models that do not 
 # converge quickly. 
-poliblogSelect <- selectModel(out$documents, out$vocab, K=20, prevalence=~rating+s(day),
+poliblogSelect <- selectModel(out$documents, 
+                              out$vocab, 
+                              K=20, 
+                              prevalence=~rating+s(day),
                               max.em.its=75, data=meta, runs=20, seed=8458159)
 
 # Plot the different models that make the cut along exclusivity and semantic coherence
