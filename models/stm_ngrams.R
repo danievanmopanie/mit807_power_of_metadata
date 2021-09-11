@@ -146,7 +146,17 @@ table(df_pre_stm$Continent)
 #now proceed with a subset ready for STM
 dim(df_pre_stm)
 df_stm <- df_pre_stm
-df_stm <- subset(df_stm, select = c("Document_Title", "Abstract", "Year_Published", "Publication_Name", "Times_Cited", "Country", "Continent", "Author_Keywords", "Keyword_Plus"))
+df_stm <- subset(df_stm, select = c("Document_Title", 
+                                    "Abstract", 
+                                    "Year_Published", 
+                                    "Publication_Name", 
+                                    "Times_Cited", 
+                                    "Country", 
+                                    "Continent", 
+                                    "Author_Keywords", 
+                                    "Keyword_Plus",
+                                    "Language",
+                                    "Document_Type"))
 colSums(is.na(df_stm))
 df_stm <- df_stm %>% drop_na
 head(df_stm)
@@ -158,17 +168,26 @@ df_stm$Publication_Name <- as.factor(df_stm$Publication_Name)
 str(df_stm)
 dim(df_stm)
 
+#Only english inputs
+table(df_stm$Language)
+table(df_stm$Document_Type)
+df_stm <- subset(df_stm, df_stm$Language == "ENGLISH")
+
+#Remove duplication
+df_stm <- df_stm %>%
+  distinct(Document_Title, Abstract, .keep_all = TRUE)
+
 head(df_stm)
 colnames(df_stm)
 
-model <- head(df_stm, 2000)
+#start by preparing the data with the quanteda package (allows ngrams!)
 model <- df_stm
-model$Original_Text <- model$Abstract
+model$Original_Text <- model$Abstract #this allows you to see the original text when you do exploration
 colnames(model)
 colSums(is.na(model))
 dim(model)
 
-?corpus
+#?corpus
 my_corpus <- corpus(model, text_field = 'Abstract')
 
 ?texts
@@ -182,15 +201,15 @@ tokens_clean <- tokens(my_corpus,
                        verbose = TRUE)
 
 # remove stopwords and convert to lower-case
-?stopwords
+#?stopwords
 tokens_clean <- tokens_clean %>%
   tokens_remove(stopwords(language = 'en', source = "smart")) %>%
   #tokens_wordstem() %>%
   tokens_tolower()
 
-tokens_ngrams <- tokens_ngrams(tokens_clean, n = 1:3)
+tokens_ngrams <- tokens_ngrams(tokens_clean, n = 1:2)
 
-print(tokens_ngrams[5])
+print(tokens_ngrams[2])
 tokens_ngrams$Publication_Name[1]
 tokens_ngrams$Document_Title[1]
 tokens_ngrams$Original_Text[1]
@@ -209,6 +228,7 @@ dfm_corpus_trim <- dfm_trim(dfm_corpus,
 dim(dfm_corpus_trim)
 
 #do a little wordcloud tester
+par(mfrow=c(1,1))
 textplot_wordcloud(
   dfm_corpus_trim,
   min_size = 0.5, max_size = 4,
@@ -224,9 +244,7 @@ textplot_wordcloud(
 dfm_to_stm <- dfm_corpus_trim  #dfm_corpus_trim or dfm_corpus
 
 out <- convert(dfm_corpus_trim, to = "stm")  # convert to stm format
-
 docs <- out$documents
-docs
 vocab <- out$vocab
 vocab
 meta <- out$meta
@@ -235,7 +253,7 @@ colnames(meta)
 
 storage1<-searchK(docs, 
                   vocab, 
-                  K = c(10, 15, 20, 25, 30), 
+                  K = c(5, 10, 12, 14, 15, 17, 19, 20, 25, 30, 40, 60, 80), 
                   prevalence=~ Country + s(Year_Published) + s(Times_Cited), 
                   data = meta,
                   set.seed(9999), 
@@ -323,8 +341,8 @@ suppressWarnings(library(ggplot2))
 suppressWarnings(library(htmlwidgets))
 
 M13_Excl_Sem <- as.data.frame(cbind(c(1:13), exclusivity(model_13), semanticCoherence(model = model_13, docs), "Model K = 13"))
-M15_Excl_Sem <- as.data.frame(cbind(c(1:15),exclusivity(model_15), semanticCoherence(model = model_15, docs), "Model K = 15"))
-M17_Excl_Sem <- as.data.frame(cbind(c(1:17),exclusivity(model_17), semanticCoherence(model = model_17, docs), "Model K = 17"))
+M15_Excl_Sem <- as.data.frame(cbind(c(1:15), exclusivity(model_15), semanticCoherence(model = model_15, docs), "Model K = 15"))
+M17_Excl_Sem <- as.data.frame(cbind(c(1:17), exclusivity(model_17), semanticCoherence(model = model_17, docs), "Model K = 17"))
 
 
 Models_Excl_Sem <- rbind(M13_Excl_Sem, M15_Excl_Sem, M17_Excl_Sem)
@@ -344,12 +362,13 @@ plotexcoer <- ggplot(Models_Excl_Sem, aes(SemanticCoherence, Exclusivity, color 
 plotexcoer
 
 #model analysis of chosen model
-K_topics_chosen <- make.dt(model_24, meta)
-head(K_topics_chosen,2)
+chosen_model <- model_15
+K_topics_chosen <- make.dt(chosen_model, meta)
+colnames(K_topics_chosen)
 
-tableau_extract <- K_topics_chosen[,c(1:26, 28:33)]#visualize theta proportions, and other metadata
+tableau_extract <- K_topics_chosen[ , c(2:25)]#visualize theta proportions, and other metadata
 head(tableau_extract)
-tableau_extract$topics <- colnames(tableau_extract[,c(2:25)])[apply(tableau_extract[,c(2:25)],1,which.max)]
+tableau_extract$topics <- colnames(tableau_extract[ , c(1:15)])[apply(tableau_extract[ , c(1:15)], 1 , which.max)]
 table(tableau_extract$topics)
 getwd()
 write.csv(tableau_extract,"topics_listed.csv", row.names = TRUE)
@@ -358,11 +377,11 @@ K_topics_chosen[1:5,c(1:26, 28:33)]#visualize proportions, and other metadata
 
 #visualize the estimates of document-topic proportions 
 options(repr.plot.width=10, repr.plot.height=15)
-plot.STM(model_24, "hist")
+plot.STM(chosen_model, "hist")
 
 #plot of which topics are coming from which documents
 suppressWarnings(library(tidytext))# the package sometimes is not loaded correctly. If this happens, you might have to re-start the kernel 
-td_theta <- tidytext::tidy(model_24, matrix = "theta")
+td_theta <- tidytext::tidy(chosen_model, matrix = "theta")
 td_theta
 
 selectiontdthteta<-td_theta[td_theta$document%in%c(1:30),]#select the first 30 documents. be careful to select a sensible interval, as attempting to load a very huge corpus might crash the kernel
@@ -378,10 +397,8 @@ thetaplot1
 
 #look at the word frequencies per topic
 suppressWarnings(library(dplyr))
-#install.packages("drlib")
-suppressWarnings(library(drlib))#drlib is available on github and needs devtools to be installed
 
-td_beta <- tidytext::tidy(model_24)
+td_beta <- tidytext::tidy(chosen_model)
 
 options(repr.plot.width=10, repr.plot.height=8, repr.plot.res=100)
 td_beta %>%
@@ -398,4 +415,192 @@ td_beta %>%
   labs(x = NULL, y = expression(beta),
        title = "Highest word probabilities for each topic",
        subtitle = "Different words are associated with different topics")
+
+#more detailed look at the word distribution within each topic
+beta_group_1 <- td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 1" | topic == "Topic 2" | topic == "Topic 3" | 
+                                                                topic == "Topic 4" | topic == "Topic 5")
+beta_group_1
+
+
+beta_group_2 <- td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 6" | topic == "Topic 7" | topic == "Topic 8" | 
+                                                                topic == "Topic 9" | topic == "Topic 10")
+
+beta_group_3 <- td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 11" | topic == "Topic 12" | topic == "Topic 13" | 
+                                                                topic == "Topic 14" | topic == "Topic 15")
+
+library(ggplot2)
+
+betaplot_group_1 <- ggplot(beta_group_1[beta_group_1$beta > 0.005,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity") + 
+  coord_flip() + 
+  facet_wrap(~ topic, scales = "free_y") +
+  labs(x ="Terms", y = expression(beta),title = "Word probabilities for Topics 1-5")
+
+betaplot_group_2 <- ggplot(beta_group_2[beta_group_2$beta > 0.005,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity") + 
+  coord_flip() + 
+  facet_wrap(~ topic, scales = "free_y") +
+  labs(x ="Terms", y = expression(beta),title = "Word probabilities for Topics 6-10")
+
+betaplot_group_3 <- ggplot(beta_group_3[beta_group_3$beta > 0.005,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity") + 
+  coord_flip() + 
+  facet_wrap(~ topic, scales = "free_y") +
+  labs(x ="Terms", y = expression(beta),title = "Word probabilities for Topics 11-15")
+
+options(repr.plot.width=9, repr.plot.height=10, repr.plot.res=100)
+betaplot_group_1
+betaplot_group_2
+betaplot_group_3
+
+#visualize the topic distribution (which topics are overall more common)
+options(repr.plot.width = 7, repr.plot.height = 7, repr.plot.res = 100)
+par(mfrow=c(1,1))
+plot.STM(chosen_model, "summary", n = 7)# distribution and top 5 words per topic
+
+#make comparisons between topics and understand more which differences there are between them
+labelTopics(chosen_model, topics=c(5,6,9), n=10)# complete list of top 10 words per topics 5-6-9
+?labelTopics
+labelTopics(chosen_model, n = 10)
+
+par(mfrow=c(1,1), mar=c(0,2,0,0))
+options(repr.plot.width=5, repr.plot.height=3, repr.plot.res=100)
+plot.STM(chosen_model, "labels", topics=c(5,6,9), label="frex", n=10, width=55)#top 10 FREX words per topics 5-6-9
+
+#glimpse at highly representative documents per each topic with findThoughts
+colnames(model)
+thoughts1_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 1, n = 4)$docs[[1]]
+thoughts1_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 1, n = 2)$docs[[1]]
+thoughts1_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 1, n = 4)$docs[[1]]
+thoughts1_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 1, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0,0,2,2))
+plotQuote(thoughts1_0, width=15, maxwidth=200, text.cex=1, main="Topic 1 Title")
+plotQuote(thoughts1_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 1 Abstract")
+plotQuote(thoughts1_2, width=20, maxwidth=200, text.cex=1, main="Topic 1 Author Keywords")
+plotQuote(thoughts1_3, width=30, maxwidth=200, text.cex=1, main="Topic 1 Keywords Plus")
+
+thoughts2_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 2, n = 4)$docs[[1]]
+thoughts2_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 2, n = 3)$docs[[1]]
+thoughts2_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 2, n = 4)$docs[[1]]
+thoughts2_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 2, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts2_0, width=15, maxwidth=200, text.cex=1, main="Topic 2 Title")
+plotQuote(thoughts2_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 2 Abstract")
+plotQuote(thoughts2_2, width=20, maxwidth=200, text.cex=1, main="Topic 2 Author Keywords")
+plotQuote(thoughts2_3, width=30, maxwidth=200, text.cex=1, main="Topic 2 Keywords Plus")
+
+thoughts3_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 3, n = 4)$docs[[1]]
+thoughts3_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 3, n = 3)$docs[[1]]
+thoughts3_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 3, n = 4)$docs[[1]]
+thoughts3_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 3, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts3_0, width=15, maxwidth=200, text.cex=1, main="Topic 3 Title")
+plotQuote(thoughts3_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 3 Abstract")
+plotQuote(thoughts3_2, width=20, maxwidth=200, text.cex=1, main="Topic 3 Author Keywords")
+plotQuote(thoughts3_3, width=30, maxwidth=200, text.cex=1, main="Topic 3 Keywords Plus")
+
+thoughts4_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 4, n = 4)$docs[[1]]
+thoughts4_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 4, n = 3)$docs[[1]]
+thoughts4_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 4, n = 4)$docs[[1]]
+thoughts4_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 4, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts4_0, width=15, maxwidth=200, text.cex=1, main="Topic 4 Title")
+plotQuote(thoughts4_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 4 Abstract")
+plotQuote(thoughts4_2, width=20, maxwidth=200, text.cex=1, main="Topic 4 Author Keywords")
+plotQuote(thoughts4_3, width=30, maxwidth=200, text.cex=1, main="Topic 4 Keywords Plus")
+labelTopics(chosen_model, topic = 4, n = 10)
+
+thoughts5_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 5, n = 4)$docs[[1]]
+thoughts5_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 5, n = 3)$docs[[1]]
+thoughts5_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 5, n = 4)$docs[[1]]
+thoughts5_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 5, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts5_0, width=15, maxwidth=200, text.cex=1, main="Topic 5 Title")
+plotQuote(thoughts5_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 5 Abstract")
+plotQuote(thoughts5_2, width=20, maxwidth=200, text.cex=1, main="Topic 5 Author Keywords")
+plotQuote(thoughts5_3, width=30, maxwidth=200, text.cex=1, main="Topic 5 Keywords Plus")
+labelTopics(chosen_model, topic = 5, n = 10)
+
+thoughts6_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 6, n = 4)$docs[[1]]
+thoughts6_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 6, n = 3)$docs[[1]]
+thoughts6_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 6, n = 4)$docs[[1]]
+thoughts6_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 6, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts6_0, width=15, maxwidth=200, text.cex=1, main="Topic 6 Title")
+plotQuote(thoughts6_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 6 Abstract")
+plotQuote(thoughts6_2, width=20, maxwidth=200, text.cex=1, main="Topic 6 Author Keywords")
+plotQuote(thoughts6_3, width=30, maxwidth=200, text.cex=1, main="Topic 6 Keywords Plus")
+labelTopics(chosen_model, topic = 6, n = 10)
+
+thoughts7_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 7, n = 4)$docs[[1]]
+thoughts7_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 7, n = 3)$docs[[1]]
+thoughts7_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 7, n = 4)$docs[[1]]
+thoughts7_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 7, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts7_0, width=15, maxwidth=200, text.cex=1, main="Topic 7 Title")
+plotQuote(thoughts7_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 7 Abstract")
+plotQuote(thoughts7_2, width=20, maxwidth=200, text.cex=1, main="Topic 7 Author Keywords")
+plotQuote(thoughts7_3, width=30, maxwidth=200, text.cex=1, main="Topic 7 Keywords Plus")
+labelTopics(chosen_model, topic = 7, n = 10)
+
+thoughts8_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 8, n = 4)$docs[[1]]
+thoughts8_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 8, n = 3)$docs[[1]]
+thoughts8_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 8, n = 4)$docs[[1]]
+thoughts8_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 8, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts8_0, width=15, maxwidth=200, text.cex=1, main="Topic 8 Title")
+plotQuote(thoughts8_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 8 Abstract")
+plotQuote(thoughts8_2, width=20, maxwidth=200, text.cex=1, main="Topic 8 Author Keywords")
+plotQuote(thoughts8_3, width=30, maxwidth=200, text.cex=1, main="Topic 8 Keywords Plus")
+labelTopics(chosen_model, topic = 8, n = 10)
+
+thoughts9_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 9, n = 4)$docs[[1]]
+thoughts9_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 9, n = 3)$docs[[1]]
+thoughts9_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 9, n = 4)$docs[[1]]
+thoughts9_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 9, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts9_0, width=15, maxwidth=200, text.cex=1, main="Topic 9 Title")
+plotQuote(thoughts9_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 9 Abstract")
+plotQuote(thoughts9_2, width=20, maxwidth=200, text.cex=1, main="Topic 9 Author Keywords")
+plotQuote(thoughts9_3, width=30, maxwidth=200, text.cex=1, main="Topic 9 Keywords Plus")
+labelTopics(chosen_model, topic = 9, n = 10)
+
+thoughts10_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 10, n = 4)$docs[[1]]
+thoughts10_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 10, n = 3)$docs[[1]]
+thoughts10_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 10, n = 4)$docs[[1]]
+thoughts10_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 10, n = 4)$docs[[1]]
+
+options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
+par(mfrow=c(1,4), mar=c(0.1,0,2,2))
+plotQuote(thoughts10_0, width=15, maxwidth=200, text.cex=1, main="Topic 10 Title")
+plotQuote(thoughts10_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 10 Abstract")
+plotQuote(thoughts10_2, width=20, maxwidth=200, text.cex=1, main="Topic 10 Author Keywords")
+plotQuote(thoughts10_3, width=30, maxwidth=200, text.cex=1, main="Topic 10 Keywords Plus")
+labelTopics(chosen_model, topic = 10, n = 10)
+
+
 
