@@ -35,11 +35,12 @@ list.files()
 
 setwd("/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/tutorials_and_exercises/data")
 list.files()
-data <- read.csv("poliblogs2008.csv") # Download link: https://goo.gl/4ohgr4
-head(data)
-colnames(data)
+data <- read.csv("poliblogs2008.csv") 
+load("VignetteObjects.RData") 
 
-#load("VignetteObjects.RData")         # Download link: https://goo.gl/xK17EQ
+head(data,1)
+colnames(data)
+dim(data)
 
 # ----------------------------------------
 # PREPARE AND PRE-PROCESS DATA
