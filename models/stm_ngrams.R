@@ -248,16 +248,15 @@ docs <- out$documents
 vocab <- out$vocab
 vocab
 meta <- out$meta
-
 colnames(meta)
 
 storage1<-searchK(docs, 
                   vocab, 
-                  K = c(5, 10, 12, 14, 15, 17, 19, 20, 25, 30, 40, 60, 80), 
+                  K = c(5, 10, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 30, 40, 60, 80), 
                   prevalence=~ Country + s(Year_Published) + s(Times_Cited), 
                   data = meta,
                   set.seed(9999), 
-                  verbose=TRUE)
+                  verbose = TRUE)
 
 print(storage1$results)
 options(repr.plot.width=6, repr.plot.height=6)
@@ -267,6 +266,9 @@ plot(storage1)
 unnest_list <- unnest(storage1$result, c(K, exclus, semcoh, heldout, residual, bound, lbound, em.its))
 df_results <- data.frame(unnest_list)
 df_results
+
+getwd()
+write.csv(df_results,"model_performance.csv", row.names = TRUE)
 
 require(gridExtra)
 plot1 <- ggplot(data = df_results, 
@@ -311,14 +313,9 @@ plot5 <- ggplot(data = df_results,
 
 grid.arrange(plot3, plot4, plot2, plot1, ncol=2)
 
-#select 3 models to test
-model_13 <- stm(documents = out$documents, 
-                vocab = out$vocab, 
-                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
-                K = 13, 
-                data = out$meta, 
-                init.type = "Spectral", 
-                verbose = TRUE)
+# select 4 models to test (K = c(15, 17, 19, 20))
+# start the clock!
+timer_start <- proc.time()
 
 model_15 <- stm(documents = out$documents, 
                 vocab = out$vocab, 
@@ -336,29 +333,73 @@ model_17 <- stm(documents = out$documents,
                 init.type = "Spectral", 
                 verbose = TRUE)
 
+model_19 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 19, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+model_20 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 20, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+model_21 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 21, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+model_22 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 22, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+# Stop the clock
+timer_end <- proc.time() - ptm
+timer_end
+
 #exclusivity against semantic coherence per topic per model
 suppressWarnings(library(ggplot2))
 suppressWarnings(library(htmlwidgets))
 
-M13_Excl_Sem <- as.data.frame(cbind(c(1:13), exclusivity(model_13), semanticCoherence(model = model_13, docs), "Model K = 13"))
 M15_Excl_Sem <- as.data.frame(cbind(c(1:15), exclusivity(model_15), semanticCoherence(model = model_15, docs), "Model K = 15"))
 M17_Excl_Sem <- as.data.frame(cbind(c(1:17), exclusivity(model_17), semanticCoherence(model = model_17, docs), "Model K = 17"))
+M19_Excl_Sem <- as.data.frame(cbind(c(1:19), exclusivity(model_19), semanticCoherence(model = model_19, docs), "Model K = 19"))
+M20_Excl_Sem <- as.data.frame(cbind(c(1:20), exclusivity(model_20), semanticCoherence(model = model_20, docs), "Model K = 20"))
+M21_Excl_Sem <- as.data.frame(cbind(c(1:21), exclusivity(model_21), semanticCoherence(model = model_21, docs), "Model K = 21"))
+M22_Excl_Sem <- as.data.frame(cbind(c(1:22), exclusivity(model_22), semanticCoherence(model = model_22, docs), "Model K = 22"))
 
-
-Models_Excl_Sem <- rbind(M13_Excl_Sem, M15_Excl_Sem, M17_Excl_Sem)
+Models_Excl_Sem <- rbind(M15_Excl_Sem, M17_Excl_Sem, M19_Excl_Sem, M20_Excl_Sem, M21_Excl_Sem, M22_Excl_Sem)
+head(Models_Excl_Sem)
 colnames(Models_Excl_Sem)<-c("K","Exclusivity", "SemanticCoherence", "Model")
 
 Models_Excl_Sem$Exclusivity <- as.numeric(as.character(Models_Excl_Sem$Exclusivity))
 Models_Excl_Sem$SemanticCoherence <- as.numeric(as.character(Models_Excl_Sem$SemanticCoherence))
+Models_Excl_Sem
+getwd()
+write.csv(Models_Excl_Sem,"detail_model_comaprison.csv", row.names = TRUE)
 
 #plot chosen models
 options(repr.plot.width = 8, repr.plot.height = 8, repr.plot.res = 100)
 plotexcoer <- ggplot(Models_Excl_Sem, aes(SemanticCoherence, Exclusivity, color = Model)) + 
   geom_point(size = 2, alpha = 0.7) + 
   geom_text(aes(label = K), nudge_y = .04) +
-  labs(x = "Semantic coherence",
+  labs(x = "Semantic Coherence",
        y = "Exclusivity",
-       title = "Comparing exclusivity and semantic coherence")
+       title = "Comparing Exclusivity and Semantic Coherence") #+
+  #facet_grid(rows = vars(Row), cols = vars(Col)) +
+  #theme(strip.text.x = element_blank(), strip.text.y = element_blank())
 plotexcoer
 
 #model analysis of chosen model
