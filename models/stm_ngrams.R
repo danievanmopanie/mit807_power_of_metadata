@@ -2,6 +2,7 @@
 library(bibliometrix)
 library(dplyr)
 library(tidyr)
+library(stringr)
 
 #set sorking directory
 getwd()
@@ -157,10 +158,14 @@ df_stm <- subset(df_stm, select = c("Document_Title",
                                     "Keyword_Plus",
                                     "Language",
                                     "Document_Type"))
+
+#remove nulls
 colSums(is.na(df_stm))
 df_stm <- df_stm %>% drop_na
 head(df_stm)
 colSums(is.na(df_stm))
+
+#create a decade field
 df_stm$Decade <- df_stm$Year_Published
 str_sub(df_stm$Decade, 4, 4) <- "0"; df_stm$Decade 
 table(df_stm$Decade)
@@ -170,8 +175,12 @@ dim(df_stm)
 
 #Only english inputs
 table(df_stm$Language)
-table(df_stm$Document_Type)
 df_stm <- subset(df_stm, df_stm$Language == "ENGLISH")
+
+#Only academic publications
+table(df_stm$Document_Type)
+df_stm <- subset(df_stm, df_stm$Document_Type == "ARTICLE" | df_stm$Document_Type == "CONFERENCE PAPER")
+table(df_stm$Document_Type)
 
 #Remove duplication
 df_stm <- df_stm %>%
@@ -188,6 +197,8 @@ colSums(is.na(model))
 dim(model)
 
 #?corpus
+library(quanteda)
+library(quanteda.textplots)
 my_corpus <- corpus(model, text_field = 'Abstract')
 
 ?texts
@@ -204,7 +215,7 @@ tokens_clean <- tokens(my_corpus,
 #?stopwords
 tokens_clean <- tokens_clean %>%
   tokens_remove(stopwords(language = 'en', source = "smart")) %>%
-  #tokens_wordstem() %>%
+  #tokens_wordstem() %>%  #i do not want to stem at this point in time
   tokens_tolower()
 
 tokens_ngrams <- tokens_ngrams(tokens_clean, n = 1:2)
@@ -221,7 +232,7 @@ dim(dfm_corpus)
 
 ?dfm_trim
 dfm_corpus_trim <- dfm_trim(dfm_corpus,
-                            min_termfreq = 5,
+                            min_termfreq = 7,
                             #max_docfreq = 0.90,
                             termfreq_type = "count",
                             verbose = TRUE)
@@ -250,13 +261,18 @@ vocab
 meta <- out$meta
 colnames(meta)
 
+# Start the clock
+timer_start <- proc.time()
 storage1<-searchK(docs, 
                   vocab, 
-                  K = c(5, 10, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 30, 40, 60, 80), 
+                  K = c(5, 10, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 30, 40, 60, 80, 100), 
                   prevalence=~ Country + s(Year_Published) + s(Times_Cited), 
                   data = meta,
                   set.seed(9999), 
                   verbose = TRUE)
+# Stop the clock
+timer_end <- proc.time() - ptm
+timer_end
 
 print(storage1$results)
 options(repr.plot.width=6, repr.plot.height=6)
@@ -267,6 +283,8 @@ unnest_list <- unnest(storage1$result, c(K, exclus, semcoh, heldout, residual, b
 df_results <- data.frame(unnest_list)
 df_results
 
+csv_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
+setwd(csv_path)
 getwd()
 write.csv(df_results,"model_performance.csv", row.names = TRUE)
 
@@ -387,6 +405,9 @@ colnames(Models_Excl_Sem)<-c("K","Exclusivity", "SemanticCoherence", "Model")
 Models_Excl_Sem$Exclusivity <- as.numeric(as.character(Models_Excl_Sem$Exclusivity))
 Models_Excl_Sem$SemanticCoherence <- as.numeric(as.character(Models_Excl_Sem$SemanticCoherence))
 Models_Excl_Sem
+
+csv_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
+setwd(csv_path)
 getwd()
 write.csv(Models_Excl_Sem,"detail_model_comaprison.csv", row.names = TRUE)
 
@@ -403,18 +424,20 @@ plotexcoer <- ggplot(Models_Excl_Sem, aes(SemanticCoherence, Exclusivity, color 
 plotexcoer
 
 #model analysis of chosen model
-chosen_model <- model_15
+chosen_model <- model_20
 K_topics_chosen <- make.dt(chosen_model, meta)
 colnames(K_topics_chosen)
+dim(K_topics_chosen)
 
-tableau_extract <- K_topics_chosen[ , c(2:25)]#visualize theta proportions, and other metadata
+tableau_extract <- K_topics_chosen[ , c(2:21, 22:27, 32)]#visualize theta proportions, and other metadata
 head(tableau_extract)
-tableau_extract$topics <- colnames(tableau_extract[ , c(1:15)])[apply(tableau_extract[ , c(1:15)], 1 , which.max)]
+tableau_extract$topics <- colnames(tableau_extract[ , c(1:20)])[apply(tableau_extract[ , c(1:20)], 1 , which.max)]
 table(tableau_extract$topics)
+
+csv_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
+setwd(csv_path)
 getwd()
 write.csv(tableau_extract,"topics_listed.csv", row.names = TRUE)
-
-K_topics_chosen[1:5,c(1:26, 28:33)]#visualize proportions, and other metadata
 
 #visualize the estimates of document-topic proportions 
 options(repr.plot.width=10, repr.plot.height=15)
@@ -423,7 +446,7 @@ plot.STM(chosen_model, "hist")
 #plot of which topics are coming from which documents
 suppressWarnings(library(tidytext))# the package sometimes is not loaded correctly. If this happens, you might have to re-start the kernel 
 td_theta <- tidytext::tidy(chosen_model, matrix = "theta")
-td_theta
+head(td_theta,4)
 
 selectiontdthteta<-td_theta[td_theta$document%in%c(1:30),]#select the first 30 documents. be careful to select a sensible interval, as attempting to load a very huge corpus might crash the kernel
 
@@ -435,6 +458,15 @@ thetaplot1<-ggplot(selectiontdthteta, aes(y=gamma, x=as.factor(topic), fill = as
 
 options(repr.plot.width=10, repr.plot.height=7, repr.plot.res=100)
 thetaplot1
+
+#compare well clear theta topics and not so clear
+model$Document_Title[4]
+model$Abstract[4]
+tableau_extract[4]
+
+model$Document_Title[23]
+model$Abstract[23]
+tableau_extract[23]
 
 #look at the word frequencies per topic
 suppressWarnings(library(dplyr))
@@ -475,6 +507,11 @@ beta_group_3 <- td_beta %>%
          term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 11" | topic == "Topic 12" | topic == "Topic 13" | 
                                                                 topic == "Topic 14" | topic == "Topic 15")
 
+beta_group_4 <- td_beta %>%
+  mutate(topic = paste0("Topic ", topic),
+         term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 16" | topic == "Topic 17" | topic == "Topic 18" | 
+                                                                topic == "Topic 19" | topic == "Topic 20")
+
 library(ggplot2)
 
 betaplot_group_1 <- ggplot(beta_group_1[beta_group_1$beta > 0.005,], aes(term, beta, fill = as.factor(topic))) +
@@ -495,10 +532,17 @@ betaplot_group_3 <- ggplot(beta_group_3[beta_group_3$beta > 0.005,], aes(term, b
   facet_wrap(~ topic, scales = "free_y") +
   labs(x ="Terms", y = expression(beta),title = "Word probabilities for Topics 11-15")
 
+betaplot_group_4 <- ggplot(beta_group_4[beta_group_4$beta > 0.005,], aes(term, beta, fill = as.factor(topic))) +
+  geom_bar(alpha = 0.8, show.legend = FALSE, stat = "Identity") + 
+  coord_flip() + 
+  facet_wrap(~ topic, scales = "free_y") +
+  labs(x ="Terms", y = expression(beta),title = "Word probabilities for Topics 16-20")
+
 options(repr.plot.width=9, repr.plot.height=10, repr.plot.res=100)
 betaplot_group_1
 betaplot_group_2
 betaplot_group_3
+betaplot_group_4
 
 #visualize the topic distribution (which topics are overall more common)
 options(repr.plot.width = 7, repr.plot.height = 7, repr.plot.res = 100)
@@ -522,7 +566,8 @@ thoughts1_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics =
 thoughts1_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 1, n = 4)$docs[[1]]
 
 options(repr.plot.width=10, repr.plot.height=12, repr.plot.res=100)
-par(mfrow=c(1,4), mar=c(0,0,2,2))
+?par
+par(mfrow = c(1, 4), mai = c(0.1, 0.1, 0.1, 0.1), mar = c(0, 0, 2, 2))
 plotQuote(thoughts1_0, width=15, maxwidth=200, text.cex=1, main="Topic 1 Title")
 plotQuote(thoughts1_1, width=15, maxwidth=200, text.cex=0.9, main="Topic 1 Abstract")
 plotQuote(thoughts1_2, width=20, maxwidth=200, text.cex=1, main="Topic 1 Author Keywords")
