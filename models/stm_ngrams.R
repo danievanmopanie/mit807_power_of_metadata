@@ -557,6 +557,9 @@ options(repr.plot.width = 7, repr.plot.height = 7, repr.plot.res = 100)
 par(mfrow=c(1,1))
 plot.STM(chosen_model, "summary", n = 7)# distribution and top 5 words per topic
 
+plot.STM(model_18, "summary", n = 7)# distribution and top 5 words per topic
+plot.STM(model_19, "summary", n = 7)# distribution and top 5 words per topic
+
 #make comparisons between topics and understand more which differences there are between them
 labelTopics(chosen_model, topics=c(5,6,9), n=10)# complete list of top 10 words per topics 5-6-9
 ?labelTopics
