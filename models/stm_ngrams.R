@@ -23,11 +23,13 @@ M <- convert2df(path_to_bib_files, dbsource = "scopus", format = "bibtex")
 typeof(M)
 colnames(M)
 colSums(is.na(M))
+M$AU[550]
 M$AB[550]
 M$CR[550]
 M$ID[550]
 M$DE[550]
 
+head(M$AU) #Keywords Plus®
 head(M$ID) #Keywords Plus®
 head(M$DE) #Author Keywords
 dim(M)
@@ -39,10 +41,14 @@ dim(M)
 ?biblioAnalysis
 results <- biblioAnalysis(M, sep = ";")
 
+results$DE, 30
+
 options(width=100)
 S <- summary(object = results, 
              k = 30, 
              pause = FALSE)
+
+S
 
 plot(x = results, 
      k = 20, 
@@ -88,7 +94,7 @@ head(df_checkpoint)
 
 df_pre_stm <- df_checkpoint %>%
   rename(
-    Authors = AU,
+    Authors = AU, #Include in STM
     Author_Keywords = DE, #Include in STM
     Keyword_Plus = ID, #Include in STM
     Author_Address = C1,
@@ -115,6 +121,9 @@ df_pre_stm <- df_checkpoint %>%
     Funding_Text = FX 
   )
 
+df_pre_stm$ISO_Source_Abbrev
+df_pre_stm$Authors[1:20]
+
 #create variable for country and continent
 library(stringi)
 head(df_pre_stm$Author_Keywords)
@@ -124,30 +133,33 @@ colSums(is.na(df_pre_stm))
 head(df_pre_stm)
 country_vec <- df_countries$Country
 country_vec
+
 #now find the country in the Author_Address string
 df_pre_stm$Country = stri_extract_first(df_pre_stm$Author_Address, 
                                         regex = sprintf(r="(\b(%s)\b)", 
                                                         stri_c(country_vec,collapse = "|")))
 df_pre_stm$Country
 
-#now find the Country in the Author_Address string
+#now find the continent from the country selection
 df_pre_stm$Continent <- countrycode(sourcevar = df_pre_stm[, "Country"],
                                     origin = "country.name",
                                     destination = "continent")
 df_pre_stm$Continent
 
-#make all the null countries and continents "Other"
-df_pre_stm$Country <- ifelse(is.na(df_pre_stm$Country), "OTHER", df_pre_stm$Country)
+#make all the null countries and continents "UNKNOWN"
+df_pre_stm$Country <- ifelse(is.na(df_pre_stm$Country), "UNKNOWN", df_pre_stm$Country)
 head(df_pre_stm$Country)
+table(df_pre_stm$Country)
 
-df_pre_stm$Continent <- ifelse(is.na(df_pre_stm$Continent), "OTHER", df_pre_stm$Continent)
+df_pre_stm$Continent <- ifelse(is.na(df_pre_stm$Continent), "UNKNOWN", df_pre_stm$Continent)
 head(df_pre_stm$Continent)
 table(df_pre_stm$Continent)
 
 #now proceed with a subset ready for STM
 dim(df_pre_stm)
 df_stm <- df_pre_stm
-df_stm <- subset(df_stm, select = c("Document_Title", 
+df_stm <- subset(df_stm, select = c("Authors", 
+                                    "Document_Title", 
                                     "Abstract", 
                                     "Year_Published", 
                                     "Publication_Name", 
@@ -159,11 +171,15 @@ df_stm <- subset(df_stm, select = c("Document_Title",
                                     "Language",
                                     "Document_Type"))
 
+head(df_stm)
+
 #remove nulls
 colSums(is.na(df_stm))
 df_stm <- df_stm %>% drop_na
-head(df_stm)
 colSums(is.na(df_stm))
+nrow(df_pre_stm) - nrow(df_stm) #number of rows removed
+
+subset(df_stm, df_stm$Authors == "NA NA") #check out unauthored 
 
 #create a decade field
 df_stm$Decade <- df_stm$Year_Published
@@ -173,24 +189,86 @@ df_stm$Publication_Name <- as.factor(df_stm$Publication_Name)
 str(df_stm)
 dim(df_stm)
 
-#Only english inputs
+#keep only english inputs
 table(df_stm$Language)
 df_stm <- subset(df_stm, df_stm$Language == "ENGLISH")
 
-#Only academic publications
+#only academic publications
 table(df_stm$Document_Type)
-df_stm <- subset(df_stm, df_stm$Document_Type == "ARTICLE" | df_stm$Document_Type == "CONFERENCE PAPER")
+df_stm <- subset(df_stm, df_stm$Document_Type == "ARTICLE" | 
+                   df_stm$Document_Type == "CONFERENCE PAPER" | 
+                   df_stm$Document_Type == "BOOK CHAPTER")
 table(df_stm$Document_Type)
+nrow(df_pre_stm) - nrow(df_stm) #number of rows removed
 
-#Remove duplication
+colnames(df_stm)
+df_stm$Document_Type <- trimws(df_stm$Document_Type) #remove leading and trailing whitespace
+df_stm$Authors <- trimws(df_stm$Authors) #remove leading and trailing whitespace
+
+#export a CSVs to inspect data
+author_list <- as.data.frame(df_stm$Authors)
+names(author_list)[names(author_list) == 'df_stm$Authors'] <- 'author'
+author_list$row_num <- seq.int(nrow(author_list)) 
+head(author_list)
+
+author_list <- author_list %>% 
+  mutate(author = strsplit(as.character(author), ";")) %>% 
+  unnest(author)
+
+data_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
+setwd(data_path)
+list.files(data_path)
+write.csv(author_list,"authors.csv", row.names = TRUE)
+
+publications <- as.data.frame(df_stm$Publication_Name)
+publications$row_num <- seq.int(nrow(publications)) 
+names(publications)[names(publications) == 'df_stm$Publication_Name'] <- 'publication'
+head(publications)
+write.csv(publications,"publications.csv", row.names = TRUE)
+
+colnames(df_stm)
+author_keywords_plus <- subset(df_stm, select = c("Author_Keywords", "Keyword_Plus"))
+
+keywords <- data.frame(keyword = unlist(author_keywords_plus))
+rownames(keywords) <- NULL
+head(keywords)
+keywords <- subset(keywords, keywords$keyword != "")
+head(keywords, 20)
+tail(keywords, 20)
+colnames(keywords)
+
+keywords <- keywords %>% 
+  mutate(keyword = strsplit(as.character(keyword), ";")) %>% 
+  unnest(keyword)
+
+keywords$row_num <- seq.int(nrow(keywords))
+keywords$keyword <- trimws(keywords$keyword) #remove leading and trailing whitespace
+head(keywords, 20)
+tail(keywords, 20)
+
+data_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
+setwd(data_path)
+list.files(data_path)
+write.csv(keywords,"bibiliometric_keywords.csv", row.names = TRUE)
+
+#Remove duplications
 df_stm <- df_stm %>%
-  distinct(Document_Title, Abstract, .keep_all = TRUE)
+  distinct(Document_Title, .keep_all = TRUE)
 
-head(df_stm)
+df_stm <- df_stm %>%
+  distinct(Abstract, .keep_all = TRUE)
+
+head(df_stm$Authors, 20)
 colnames(df_stm)
 
+df_stm_unnest <- df_stm
+
+df_stm_unnest <- df_stm_unnest %>% #trying to make the Author part of the STM classification
+  mutate(Authors = strsplit(as.character(Authors), ";")) %>% 
+  unnest(Authors)
+
 #start by preparing the data with the quanteda package (allows ngrams!)
-model <- df_stm
+model <- df_stm #df_stm
 model$Original_Text <- model$Abstract #this allows you to see the original text when you do exploration
 colnames(model)
 colSums(is.na(model))
@@ -211,46 +289,103 @@ tokens_clean <- tokens(my_corpus,
                        include_docvars = TRUE, 
                        verbose = TRUE)
 
-# remove stopwords and convert to lower-case
+tokens_clean[[20]]
+
+#remove stopwords and convert to lower-case
 #?stopwords
+?tokens_remove
+txt_round1 <- c("conference", "proceedings", "taylor", "francis", "elsevier",  #custom tokens to remove
+                "aims", "large", "14th", "29th", "based", "important", "key",
+                 "main", "high") 
+
+txt_round2 <- c("view", "can", "also", "one",  #custom tokens to remove
+                "two", "three", "four", "five", "six", "seven", "within",
+                "ltd", "many", "may", "among") 
+
 tokens_clean <- tokens_clean %>%
-  tokens_remove(stopwords(language = 'en', source = "smart")) %>%
-  #tokens_wordstem() %>%  #i do not want to stem at this point in time
+  tokens_remove(stopwords("english")) %>%
+  tokens_remove(txt_round1) %>%
+  tokens_remove(txt_round2) %>%
+  #tokens_wordstem() %>%  #I do not want to stem at this point in time
   tokens_tolower()
 
-tokens_ngrams <- tokens_ngrams(tokens_clean, n = 1:2)
+tokens_clean[[500]]
+tokens_clean[[5000]]
+tokens_clean[[8000]]
+
+tokens_ngrams <- tokens_ngrams(tokens_clean, n = 1:3)
 
 print(tokens_ngrams[2])
-tokens_ngrams$Publication_Name[1]
-tokens_ngrams$Document_Title[1]
-tokens_ngrams$Original_Text[1]
+tokens_ngrams$Publication_Name[[1]]
+tokens_ngrams$Document_Title[[1]]
+tokens_ngrams$Original_Text[[1]]
+tokens_ngrams$Authors[20]
+
+tokens_ngrams[[500]]
+tokens_ngrams[[5000]]
+tokens_ngrams[[30]]
 
 ?dfm
 dfm_corpus <- dfm(tokens_ngrams,
+                  remove_padding = TRUE,
                   verbose = TRUE)
 dim(dfm_corpus)
 
 ?dfm_trim
 dfm_corpus_trim <- dfm_trim(dfm_corpus,
-                            min_termfreq = 7,
-                            #max_docfreq = 0.90,
-                            termfreq_type = "count",
+                            min_termfreq = 30, #min_docfreq  #
+                            min_docfreq = 20, #max_docfreq
+                            termfreq_type = "count", #"count" "prop", "rank"
                             verbose = TRUE)
 dim(dfm_corpus_trim)
 
+#install.packages("quanteda.textstats")
+library(quanteda.textstats)
+??textstat_frequency
+check_words <- textstat_frequency(dfm_corpus_trim)  #dfm_corpus
+?order
+check_words[order(check_words$docfreq, decreasing = TRUE),]
+head(check_words, 100)
+
+check_words[order(check_words$frequency, decreasing = TRUE),]
+check_words[200:300,]
+check_words[500:600,]
+tail(check_words, 100)
+
+check_words$n_grams <- str_count(check_words$feature, "_")
+check_words$n_grams <- ifelse(check_words$n_grams == 0 , "darkgreen", ifelse(check_words$n_grams == 1, "darkred", "darkblue"))
+head(check_words)
+
+#make a quick wordcloud
+?wordcloud
+dev.new(width = 1000, height = 1000, unit = "px")
+wordcloud(check_words$feature, 
+          check_words$frequency, 
+          colors = as.character(check_words$n_grams), 
+          scale=c(4,.5),
+          max.words = 400,
+          ordered.colors=TRUE)
+warnings()
+
+?meta
+meta(dfm_corpus_trim, type = "object")$ngram
+
 #do a little wordcloud tester
-par(mfrow=c(1,1))
+dev.new(width = 1000, height = 1000, unit = "px")
+?textplot_wordcloud
 textplot_wordcloud(
   dfm_corpus_trim,
-  min_size = 0.5, max_size = 4,
-  min_count = 3, max_words = 500,
+  min_size = 0.3, 
+  max_size = 2,
+  min_count = 10, max_words = 500,
   color = "darkgreen",
   font = NULL,
-  adjust = 0, rotation = 0.1,
+  adjust = 0, rotation = 0.3,
   random_order = FALSE, random_color = FALSE, ordered_color = FALSE,
   labelcolor = "gray20",
   labelsize = 1.5, labeloffset = 0,
   fixed_aspect = TRUE, comparison = FALSE)
+warnings()
 
 dfm_to_stm <- dfm_corpus_trim  #dfm_corpus_trim or dfm_corpus
 
@@ -271,7 +406,7 @@ storage1<-searchK(docs,
                   set.seed(9999), 
                   verbose = TRUE)
 # Stop the clock
-timer_end <- proc.time() - ptm
+timer_end <- proc.time() - timer_start
 timer_end
 
 print(storage1$results)
@@ -330,35 +465,20 @@ plot5 <- ggplot(data = df_results,
        y = "Lower Bound",
        title = "Lower Bound")
 
+dev.off()
 grid.arrange(plot3, plot4, plot2, plot1, ncol=2)
 
-# select 4 models to test (K = c(15, 17, 19, 20))
+# select 4 models to test (K = c(18, 19, 21, 22, 23, 25))
 # start the clock!
-timer_start <- proc.time()
+colnames(df_stm_unnest)
 
-model_16 <- stm(documents = out$documents, 
-                vocab = out$vocab, 
-                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
-                K = 16, 
-                data = out$meta, 
-                init.type = "Spectral", 
-                verbose = TRUE)
-
-model_17 <- stm(documents = out$documents, 
-                vocab = out$vocab, 
-                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
-                K = 17, 
-                data = out$meta, 
-                init.type = "Spectral", 
-                verbose = TRUE)
-
-model_18 <- stm(documents = out$documents, 
-                vocab = out$vocab, 
-                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
-                K = 18, 
-                data = out$meta, 
-                init.type = "Spectral", 
-                verbose = TRUE)
+model_18<- stm(documents = out$documents, 
+               vocab = out$vocab, 
+               prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+               K = 18, 
+               data = out$meta, 
+               init.type = "Spectral", 
+               verbose = TRUE)
 
 model_19 <- stm(documents = out$documents, 
                 vocab = out$vocab, 
@@ -367,15 +487,6 @@ model_19 <- stm(documents = out$documents,
                 data = out$meta, 
                 init.type = "Spectral", 
                 verbose = TRUE)
-
-model_20 <- stm(documents = out$documents, 
-                vocab = out$vocab, 
-                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
-                K = 20, 
-                data = out$meta, 
-                init.type = "Spectral", 
-                verbose = TRUE)
-
 model_21 <- stm(documents = out$documents, 
                 vocab = out$vocab, 
                 prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
@@ -384,22 +495,43 @@ model_21 <- stm(documents = out$documents,
                 init.type = "Spectral", 
                 verbose = TRUE)
 
-# Stop the clock
-timer_end <- proc.time() - timer_start
-timer_end
+model_22 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 22, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+model_23 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 23, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
+
+model_25 <- stm(documents = out$documents, 
+                vocab = out$vocab, 
+                prevalence =~ Country + s(Year_Published) + s(Times_Cited), 
+                K = 25, 
+                data = out$meta, 
+                init.type = "Spectral", 
+                verbose = TRUE)
 
 #exclusivity against semantic coherence per topic per model
+# select 4 models to test (K = c(18, 19, 21, 22, 23, 25))
 suppressWarnings(library(ggplot2))
 suppressWarnings(library(htmlwidgets))
 
-M16_Excl_Sem <- as.data.frame(cbind(c(1:16), exclusivity(model_16), semanticCoherence(model = model_16, docs), "Model K = 16"))
-M17_Excl_Sem <- as.data.frame(cbind(c(1:17), exclusivity(model_17), semanticCoherence(model = model_17, docs), "Model K = 17"))
 M18_Excl_Sem <- as.data.frame(cbind(c(1:18), exclusivity(model_18), semanticCoherence(model = model_18, docs), "Model K = 18"))
 M19_Excl_Sem <- as.data.frame(cbind(c(1:19), exclusivity(model_19), semanticCoherence(model = model_19, docs), "Model K = 19"))
-M20_Excl_Sem <- as.data.frame(cbind(c(1:20), exclusivity(model_20), semanticCoherence(model = model_20, docs), "Model K = 20"))
 M21_Excl_Sem <- as.data.frame(cbind(c(1:21), exclusivity(model_21), semanticCoherence(model = model_21, docs), "Model K = 21"))
+M22_Excl_Sem <- as.data.frame(cbind(c(1:22), exclusivity(model_22), semanticCoherence(model = model_22, docs), "Model K = 22"))
+M23_Excl_Sem <- as.data.frame(cbind(c(1:23), exclusivity(model_23), semanticCoherence(model = model_23, docs), "Model K = 23"))
+M25_Excl_Sem <- as.data.frame(cbind(c(1:25), exclusivity(model_25), semanticCoherence(model = model_25, docs), "Model K = 25"))
 
-Models_Excl_Sem <- rbind(M16_Excl_Sem, M17_Excl_Sem, M18_Excl_Sem, M19_Excl_Sem, M20_Excl_Sem, M21_Excl_Sem)
+Models_Excl_Sem <- rbind(M18_Excl_Sem, M19_Excl_Sem, M21_Excl_Sem, M22_Excl_Sem, M23_Excl_Sem, M25_Excl_Sem)
 colnames(Models_Excl_Sem)<-c("K","Exclusivity", "SemanticCoherence", "Model")
 head(Models_Excl_Sem)
 
@@ -425,16 +557,18 @@ plotexcoer <- ggplot(Models_Excl_Sem, aes(SemanticCoherence, Exclusivity, color 
 plotexcoer
 
 #model analysis of chosen model
-chosen_model <- model_17
+chosen_model <- model_19
+K = 19
 K_topics_chosen <- make.dt(chosen_model, meta)
-colnames(K_topics_chosen)
+print(colnames(K_topics_chosen))
 dim(K_topics_chosen)
 
-tableau_extract <- K_topics_chosen[ , c(2:24, 29)]#visualize theta proportions, and other metadata
+tableau_extract <- K_topics_chosen[ , c(2:20, 22:27, 30:32)] #visualize theta proportions, and other metadata
 head(tableau_extract)
-tableau_extract$Topics <- colnames(tableau_extract[ , c(1:17)])[apply(tableau_extract[ , c(1:17)], 1 , which.max)]
+tableau_extract$Topics <- colnames(tableau_extract[ , c(1:19)])[apply(tableau_extract[ , c(1:19)], 1 , which.max)]
 table(tableau_extract$Topics)
 colnames(tableau_extract)
+head(tableau_extract)
 
 csv_path = "/Users/danieungerer/Documents/Meesters/Klasse/MIT807/mit807_power_of_metadata/data"
 setwd(csv_path)
@@ -443,6 +577,7 @@ write.csv(tableau_extract,"topics_listed.csv", row.names = TRUE)
 
 #visualize the estimates of document-topic proportions 
 options(repr.plot.width=10, repr.plot.height=15)
+dev.new(width = 1000, height = 1000, unit = "px")
 plot.STM(chosen_model, "hist")
 
 #plot of which topics are coming from which documents
@@ -462,15 +597,17 @@ thetaplot1<-ggplot(selectiontdthteta, aes(y=gamma, x=as.factor(topic), fill = as
   facet_wrap(~ document, ncol = 4) +
   labs(title = "Theta values per document",
        y = expression(theta), x = "Topic")
-
+dev.off()
 options(repr.plot.width=10, repr.plot.height=7, repr.plot.res=100)
 thetaplot1
 
 #compare well clear theta topics and not so clear
-model$Document_Title[4]
-model$Abstract[4]
-tableau_extract[4]
+##not so clearly defined
+model$Document_Title[5] 
+model$Abstract[5]
+tableau_extract[5]
 
+##well defined
 model$Document_Title[15]
 model$Abstract[15]
 tableau_extract[15]
@@ -518,7 +655,7 @@ beta_group_3 <- td_beta %>%
 beta_group_4 <- td_beta %>%
   mutate(topic = paste0("Topic ", topic),
          term = reorder_within(term, beta, topic)) %>% filter(topic == "Topic 16" | topic == "Topic 17" | topic == "Topic 18" | 
-                                                                topic == "Topic 19" | topic == "Topic 20")
+                                                                topic == "Topic 19")
 
 library(ggplot2)
 
@@ -561,7 +698,7 @@ plot.STM(model_18, "summary", n = 7)# distribution and top 5 words per topic
 plot.STM(model_19, "summary", n = 7)# distribution and top 5 words per topic
 
 #make comparisons between topics and understand more which differences there are between them
-labelTopics(chosen_model, topics=c(5,6,9), n=10)# complete list of top 10 words per topics 5-6-9
+labelTopics(chosen_model, topics=c(5,19,4), n=10)# complete list of top 10 words per topics 5-6-9
 ?labelTopics
 labelTopics(chosen_model, n = 10)
 
@@ -572,11 +709,13 @@ plot.STM(chosen_model, "labels", topics=c(5,6,9), label="frex", n=10, width=55)#
 #glimpse at highly representative documents per each topic with findThoughts
 colnames(model)
 thoughts1_0 <- findThoughts(chosen_model, texts = model$Document_Title, topics = 1, n = 4)$docs[[1]]
-thoughts1_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 1, n = 2)$docs[[1]]
+thoughts1_1 <- findThoughts(chosen_model, texts= model$Abstract, topics = 1, n = 3)$docs[[1]]
 thoughts1_2 <- findThoughts(chosen_model, texts= model$Author_Keywords, topics = 1, n = 4)$docs[[1]]
 thoughts1_3 <- findThoughts(chosen_model, texts= model$Keyword_Plus, topics = 1, n = 4)$docs[[1]]
 
 ?par
+
+dev.new(width = 1000, height = 1000, unit = "px")
 par(mfrow = c(1, 4), mai = c(1, 0.1, 0.1, 0.1), mar = c(0, 0, 2, 2))
 plotQuote(thoughts1_0, width=15, maxwidth=200, text.cex=1, main="Topic 1 Title")
 plotQuote(thoughts1_1, width=20, maxwidth=200, text.cex=0.9, main="Topic 1 Abstract")
