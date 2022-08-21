@@ -3,3 +3,6 @@
 .RData
 .Ruserdata
 europarl-data-speeches.zip/
+
+#Ignore .bid files
+*.bib
